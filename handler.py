@@ -98,6 +98,33 @@ def process_input(input_data, temp_dir, output_filename, input_type):
         raise Exception(f"지원하지 않는 입력 타입: {input_type}")
 
 
+COMFY_INPUT_DIR = os.environ.get("COMFY_INPUT_DIR", "/ComfyUI/input")
+
+
+def stage_for_comfy(path, task_id, label):
+    """Copy an input into ComfyUI's input folder and return the name the Load* nodes take.
+
+    ComfyUI 0.42 (2026-10) refuses absolute paths outside that folder ("Invalid audio file: /examples/audio.mp3"),
+    which failed every job; a bare file name in the input folder is accepted by old and new versions alike.
+    """
+    os.makedirs(COMFY_INPUT_DIR, exist_ok=True)
+    name = f"{task_id}_{label}{os.path.splitext(path)[1]}"
+    shutil.copy(path, os.path.join(COMFY_INPUT_DIR, name))
+    return name
+
+
+def clear_staged():
+    """A worker runs one job at a time: the previous job's staged inputs can go before this job stages its own."""
+    if not os.path.isdir(COMFY_INPUT_DIR):
+        return
+    for name in os.listdir(COMFY_INPUT_DIR):
+        if name.startswith("task_"):
+            try:
+                os.remove(os.path.join(COMFY_INPUT_DIR, name))
+            except OSError:
+                pass
+
+
 def queue_prompt(prompt, input_type="image", person_count="single"):
     url = f"http://{server_address}:8188/prompt"
     logger.info(f"Queueing prompt to: {url}")
@@ -139,9 +166,11 @@ def queue_prompt(prompt, input_type="image", person_count="single"):
         logger.info(f"프롬프트 전송 성공: {result}")
         return result
     except urllib.error.HTTPError as e:
+        body = e.read().decode("utf-8", errors="replace")
         logger.error(f"HTTP 에러 발생: {e.code} - {e.reason}")
-        logger.error(f"응답 내용: {e.read().decode('utf-8')}")
-        raise
+        logger.error(f"응답 내용: {body}")
+        # The refusal (node_errors) goes back in the job's error, so it can be read without the worker log.
+        raise Exception(f"ComfyUI refused the workflow ({e.code}): {body[:2000]}")
     except Exception as e:
         logger.error(f"프롬프트 전송 중 오류: {e}")
         raise
@@ -453,16 +482,18 @@ def handler(job):
     if person_count == "multi" and wav_path_2:
         logger.info(f"두 번째 오디오 파일 크기: {os.path.getsize(wav_path_2)} bytes")
 
-    # 워크플로우 노드 설정
+    # 워크플로우 노드 설정: the Load* nodes take files staged in ComfyUI's input folder (stage_for_comfy).
+    clear_staged()
+    staged = [stage_for_comfy(media_path, task_id, "media"), stage_for_comfy(wav_path, task_id, "audio")]
     if input_type == "image":
         # I2V 워크플로우: 이미지 입력 설정
-        prompt["284"]["inputs"]["image"] = media_path
+        prompt["284"]["inputs"]["image"] = staged[0]
     else:
         # V2V 워크플로우: 비디오 입력 설정
-        prompt["228"]["inputs"]["video"] = media_path
+        prompt["228"]["inputs"]["video"] = staged[0]
 
     # 공통 설정
-    prompt["125"]["inputs"]["audio"] = wav_path
+    prompt["125"]["inputs"]["audio"] = staged[1]
     prompt["241"]["inputs"]["positive_prompt"] = prompt_text
     prompt["245"]["inputs"]["value"] = width
     prompt["246"]["inputs"]["value"] = height
@@ -472,12 +503,13 @@ def handler(job):
     # 다중 인물용 두 번째 오디오 설정
     if person_count == "multi":
         # 워크플로우 타입에 따라 두 번째 오디오 노드 설정
+        staged.append(stage_for_comfy(wav_path_2, task_id, "audio_2"))
         if input_type == "image":  # I2V_multi.json의 경우
             if "307" in prompt:
-                prompt["307"]["inputs"]["audio"] = wav_path_2
+                prompt["307"]["inputs"]["audio"] = staged[-1]
         else:  # V2V_multi.json의 경우
             if "313" in prompt:
-                prompt["313"]["inputs"]["audio"] = wav_path_2
+                prompt["313"]["inputs"]["audio"] = staged[-1]
 
     ws_url = f"ws://{server_address}:8188/ws?clientId={client_id}"
     logger.info(f"Connecting to WebSocket: {ws_url}")
