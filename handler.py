@@ -441,6 +441,13 @@ def handler(job):
 
     prompt = load_workflow(workflow_path)
 
+    # The video model's attention follows the GPU (entrypoint.sh sets AIO_ATTENTION): the fast kernels on Blackwell,
+    # PyTorch's own on any other GPU.
+    attention = os.environ.get("AIO_ATTENTION", "sageattn")
+    for node in prompt.values():
+        if node.get("class_type") == "WanVideoModelLoader":
+            node.setdefault("inputs", {})["attention_mode"] = attention
+
     # ------------------------------------------------------------------
     # 동적 Force Offload 설정
     # ------------------------------------------------------------------
