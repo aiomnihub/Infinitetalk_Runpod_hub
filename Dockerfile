@@ -1,5 +1,8 @@
 # Use specific version of nvidia cuda image
-FROM wlsdml1114/engui_genai-base_blackwell:1.1 as runtime
+# Pinned (2026-10-26): ComfyUI and every custom node at their commit of 2026-05-15, the versions the
+# workflow JSON files were made for. Unpinned clones built in October got ComfyUI v0.42, which refused the
+# workflow with HTTP 400 on every job. Change a pin only together with the workflow JSON.
+FROM wlsdml1114/engui_genai-base_blackwell:1.1@sha256:2b9a3c212c4b58a2490801458d84136004de232d612ecf38df00f66ad7734d74 as runtime
 
 # wget 설치 (URL 다운로드를 위해)
 RUN apt-get update && apt-get install -y wget && rm -rf /var/lib/apt/lists/*
@@ -9,40 +12,40 @@ RUN pip install runpod websocket-client librosa
 
 WORKDIR /
 
-RUN git clone https://github.com/comfyanonymous/ComfyUI.git && \
+RUN git clone https://github.com/comfyanonymous/ComfyUI.git && git -C ComfyUI checkout 33ce449c8bdb && \
     cd /ComfyUI && \
     pip install -r requirements.txt
 
 RUN cd /ComfyUI/custom_nodes && \
-    git clone https://github.com/Comfy-Org/ComfyUI-Manager.git && \
+    git clone https://github.com/Comfy-Org/ComfyUI-Manager.git && git -C ComfyUI-Manager checkout 19f33695ff14 && \
     cd ComfyUI-Manager && \
     pip install -r requirements.txt
 
 RUN cd /ComfyUI/custom_nodes && \
-    git clone https://github.com/city96/ComfyUI-GGUF && \
+    git clone https://github.com/city96/ComfyUI-GGUF && git -C ComfyUI-GGUF checkout 6ea2651e7df6 && \
     cd ComfyUI-GGUF && \
     pip install -r requirements.txt
 
 RUN cd /ComfyUI/custom_nodes && \
-    git clone https://github.com/kijai/ComfyUI-KJNodes && \
+    git clone https://github.com/kijai/ComfyUI-KJNodes && git -C ComfyUI-KJNodes checkout fca78c93f034 && \
     cd ComfyUI-KJNodes && \
     pip install -r requirements.txt
 
 RUN cd /ComfyUI/custom_nodes && \
-    git clone https://github.com/Kosinkadink/ComfyUI-VideoHelperSuite && \
+    git clone https://github.com/Kosinkadink/ComfyUI-VideoHelperSuite && git -C ComfyUI-VideoHelperSuite checkout 4ee72c065db2 && \
     cd ComfyUI-VideoHelperSuite && \
     pip install -r requirements.txt
     
 RUN cd /ComfyUI/custom_nodes && \
-    git clone https://github.com/orssorbit/ComfyUI-wanBlockswap
+    git clone https://github.com/orssorbit/ComfyUI-wanBlockswap && git -C ComfyUI-wanBlockswap checkout 5fa2ec0fa558
 
 RUN cd /ComfyUI/custom_nodes && \
-    git clone https://github.com/kijai/ComfyUI-MelBandRoFormer && \
+    git clone https://github.com/kijai/ComfyUI-MelBandRoFormer && git -C ComfyUI-MelBandRoFormer checkout 92c86854e665 && \
     cd ComfyUI-MelBandRoFormer && \
     pip install -r requirements.txt
 
 RUN cd /ComfyUI/custom_nodes && \
-    git clone https://github.com/kijai/ComfyUI-WanVideoWrapper && \
+    git clone https://github.com/kijai/ComfyUI-WanVideoWrapper && git -C ComfyUI-WanVideoWrapper checkout d18cdb18597f && \
     cd ComfyUI-WanVideoWrapper && \
     pip install -r requirements.txt
 
