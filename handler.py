@@ -213,6 +213,14 @@ def get_videos(ws, prompt, input_type="image", person_count="single"):
 
     logger.info(f"히스토리 조회 중: prompt_id={prompt_id}")
     history = get_history(prompt_id)[prompt_id]
+    # A node that fails while running leaves no output; its error is in the history (reported back, not only logged).
+    status = history.get("status") or {}
+    if status.get("status_str") == "error":
+        for kind, data in status.get("messages") or []:
+            if kind == "execution_error":
+                raise Exception(f"ComfyUI node {data.get('node_id')} ({data.get('node_type')}) failed: "
+                                f"{str(data.get('exception_message', '')).strip()[:1500]}")
+        raise Exception("ComfyUI reported an execution error")
     logger.info(f"출력 노드 수: {len(history['outputs'])}")
 
     for node_id in history["outputs"]:

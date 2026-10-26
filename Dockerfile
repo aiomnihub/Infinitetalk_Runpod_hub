@@ -65,6 +65,11 @@ RUN wget -q https://huggingface.co/Comfy-Org/Wan_2.1_ComfyUI_repackaged/resolve/
 RUN wget -q https://huggingface.co/Kijai/MelBandRoFormer_comfy/resolve/main/MelBandRoformer_fp16.safetensors -O /ComfyUI/models/diffusion_models/MelBandRoformer_fp16.safetensors
 
 
+# The ML libraries the nodes were written against (their versions of 2026-05-15). Unpinned, October's build got
+# transformers 5.20, whose wav2vec2 returned no hidden states: MultiTalk failed with "'NoneType' object is not
+# subscriptable" (2026-10-26). pip resolves their own dependencies.
+RUN pip install "transformers==5.8.1" "diffusers==0.38.0" "accelerate==1.13.0" "peft==0.19.1"
+
 COPY . .
 RUN chmod +x /entrypoint.sh
 
